@@ -1,16 +1,20 @@
 import os
 import sys
+import argparse
 import mimetypes
 import pathlib
 import traceback
 from cgi import FieldStorage
 from wsgiref.util import FileWrapper
 
+"""Simple directory listing http server that also allows to upload
+files.
+"""
 
 CHUNKSIZE = 65536    # 64KB
 
 options = {
-    "rootdir": pathlib.Path("."),
+    "rootdir": pathlib.Path(".").resolve(),
 }
 
 
@@ -103,19 +107,21 @@ def dirlstpage(pth, dirs, files):
     if pth == options["rootdir"]:
         updir = "/"
     else:
-        updir = "/" / pth.parents[0]
+        updir = "/" / pth.parents[0].relative_to(options["rootdir"])
+
+    relpath = pth.relative_to(options["rootdir"])
 
     htdirlst = ""
     for dir1 in dirs:
-        full = "/" / pth / dir1
+        full = "/" / relpath / dir1
         htdirlst += "[ <a href='{0!s}'>{1!s}</a> ]<br>\n".format(full, dir1)
 
     htfilelst = ""
     for fil1 in files:
-        full = "/" / pth / fil1
+        full =  "/" / relpath / fil1
         htfilelst += "<a href='{0!s}'>{1!s}</a><br>\n".format(full, fil1)
 
-    return pattern.format(pth, updir, htdirlst, htfilelst, csspattern, jspattern).encode()
+    return pattern.format(relpath, updir, htdirlst, htfilelst, csspattern, jspattern).encode()
 
 
 def send_dirlist(startresp, pth):
@@ -163,7 +169,7 @@ def contents(pdir):
     return pdir, dirs, files
 
 
-def get_files(startresp, env, path):
+def get_uploaded_files(startresp, env, path):
     fs = FieldStorage(fp=env["wsgi.input"], environ=env)
     for key in fs:
         if fs[key].file:
@@ -212,16 +218,32 @@ def ul_serve(env, start_response):
         if fullpath.is_file():
             return send_file(start_response, fullpath)
         else:
-            return send_dirlist(start_response, pth)
+            return send_dirlist(start_response, fullpath)
 
     if method == "POST":
         if fullpath.is_dir():
-            return get_files(start_response, env, fullpath)
+            return get_uploaded_files(start_response, env, fullpath)
         else:
             return send_error(start_response, "400 BAD REQUEST", target, "Cannot upload to a file.")
 
 
+
+def get_cli_arguments(argv):
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument("-d", "--rootdir", metavar="DIR", default=".",
+                type=pathlib.Path,
+                help="set the root of the directory hierarchy to DIR")
+    parser.add_argument("-p", "--port", metavar="PORT", default=8018,
+                type=int, help="listen for connections on specified PORT")
+
+    return parser.parse_args(argv)
+
 if __name__ == "__main__":
     from wsgiref.simple_server import make_server
-    with make_server("", 8018, ul_serve) as srv:
+    args = get_cli_arguments(sys.argv[1:])
+    port = options["port"] = args.port
+    options["rootdir"] = args.rootdir
+    print("Listening on port {0}".format(port), file=sys.stderr)
+    with make_server("", port, ul_serve) as srv:
         srv.serve_forever()
