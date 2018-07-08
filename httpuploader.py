@@ -20,18 +20,38 @@ options = {
 
 jspattern = """ <script>
             (function(document, window, undefined) {
-                console.log('In script');
+
+                function boxToggle(event) {
+                            if (event.target.tagName == "DIV") {
+                                event.target.classList.toggle("boxed");
+                            }
+                        }
+                function setBoxable(itemlst) {
+                    for (var i = 0; i < itemlst.length; i++) {
+                        var item = itemlst[i];
+                        item.addEventListener('mouseenter', boxToggle, true);
+                        item.addEventListener('mouseleave', boxToggle, true);
+                    }
+                }
+
+
                 var form = document.getElementById('formupload');
                 var fileSelect = document.getElementById('fileinput');
                 var uploadButton = document.getElementById('uplbtn');
                 var msg = document.getElementById('statusmsg');
 
+                setBoxable(document.getElementsByClassName("diritem"));
+                setBoxable(document.getElementsByClassName("fileitem"));
+
                 form.addEventListener('submit', function(event) {
                     event.preventDefault();
                     console.log("Caught event");
-                    uploadButton.innerHTML = "Uploading...";
 
                     var fileList = fileSelect.files;
+                    if (fileList && fileList.length == 0) {
+                        return;
+                    }
+                    uploadButton.innerHTML = "Uploading...";
                     var formData = new FormData();
                     for (var i=0; i<fileList.length; i++) {
                         var f = fileList[i];
@@ -55,7 +75,72 @@ jspattern = """ <script>
         </script>
 """
 
-csspattern = """ """
+csspattern = """<style>
+body {
+    background: #007399;
+    font-family: "arial", "helvetica", "sans-serif";
+    font-size: large;
+    color: white;
+}
+
+a:link {
+    color: #bbbbbb;
+    text-decoration: none;
+}
+
+a:visited {
+    color: #999999;
+    text-decoration: none;
+}
+
+#topstrip {
+}
+
+#dirarea {
+    float:left;
+    overflow: auto;
+    width: 40%;
+}
+
+#filearea {
+    overflow: auto;
+}
+
+.diritem {
+    background: #002699;
+    min-width: 10%;
+    max-width: 75%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 10px;
+}
+
+.fileitem {
+    background: #002699;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 5px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 10px;
+}
+
+.filesize {
+    float: right;
+}
+
+.boxed {
+    box-shadow: 0 5px 5px 0 #001a66;
+}
+</style>
+"""
 
 def errorpage(title, name, brief, extended=""):
 
@@ -91,19 +176,26 @@ def dirlstpage(pth, dirs, files):
 <div id='topstrip'>
  <!-- <form id="formupload" action="upload" method="POST" enctype="multipart/form-data"> -->
     <form id="formupload" action="{0}" method="POST" enctype="multipart/form-data">
-        Choose files: <input type="file" id="fileinput" multiple /><br>
+        Choose files: <input type="file" id="fileinput" multiple />
         <button type="submit" id="uplbtn">Upload</button>
     </form>
     <div id="statusmsg"></div>
 </div>
-<h3>Contents of {0}</h3>
-[ <a href="{1}">..</a> ]<br>
+<h3>Contents of '{0}'</h3>
+<div id='dirarea'>
+<div class='diritem'><a href="{1}">..</a></div><br>
 {2}
+</div>
+<div id='filearea'>
 {3}
+</div>
 {5}
 </body>
 </html>
 """
+    dirptn = "<div class='diritem'><a href='{0!s}'>{1!s}</a></div><br>\n"
+    fileptn = "<div class='fileitem'><a href='{0!s}'>{1!s}</a>&nbsp;<span class='filesize'>{2}</span></div>\n"
+
     if pth == options["rootdir"]:
         updir = "/"
     else:
@@ -114,12 +206,12 @@ def dirlstpage(pth, dirs, files):
     htdirlst = ""
     for dir1 in dirs:
         full = "/" / relpath / dir1
-        htdirlst += "[ <a href='{0!s}'>{1!s}</a> ]<br>\n".format(full, dir1)
+        htdirlst += dirptn.format(full, dir1)
 
     htfilelst = ""
-    for fil1 in files:
+    for fil1, sz in files:
         full =  "/" / relpath / fil1
-        htfilelst += "<a href='{0!s}'>{1!s}</a><br>\n".format(full, fil1)
+        htfilelst += fileptn.format(full, fil1, sz)
 
     return pattern.format(relpath, updir, htdirlst, htfilelst, csspattern, jspattern).encode()
 
@@ -156,6 +248,19 @@ def send_file(startresp, pfile):
     return FileWrapper(pfile.open("rb"))
 
 
+def human_size(size):
+    units = [ "KB", "MB", "GB", "TB" ]
+    n = size
+    lastu = "bytes"
+    for u in units:
+        lastn = n
+        n = n / 1024
+        if n < 1:
+            return "{0:.5g} {1}".format(lastn, lastu)
+        lastu = u
+    else:
+        return "{0:.5g} {1}".format(n, lastu)
+
 
 def contents(pdir):
     dirs = []
@@ -165,8 +270,10 @@ def contents(pdir):
             if entry.is_dir():
                 dirs.append(entry.name)
             else:
-                files.append(entry.name)
-    return pdir, dirs, files
+                stat = entry.stat()
+                szstr = human_size(stat.st_size)
+                files.append( (entry.name, szstr) )
+    return pdir, sorted(dirs), sorted(files)
 
 
 def get_uploaded_files(startresp, env, path):
