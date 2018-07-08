@@ -35,15 +35,24 @@ jspattern = """ <script>
                 }
 
 
-                var form = document.getElementById('formupload');
                 var fileSelect = document.getElementById('fileinput');
                 var uploadButton = document.getElementById('uplbtn');
                 var msg = document.getElementById('statusmsg');
+                var curdir = document.getElementById('curdir');
+
+                uploadButton.addEventListener('mouseenter', function() {
+                        uploadButton.style.background = "#6699ff";
+                        uploadButton.classList.toggle("boxed");
+                    }, true);
+                uploadButton.addEventListener('mouseleave', function() {
+                        uploadButton.style.background = "#3377ff";
+                        uploadButton.classList.toggle("boxed");
+                    }, true);
 
                 setBoxable(document.getElementsByClassName("diritem"));
                 setBoxable(document.getElementsByClassName("fileitem"));
 
-                form.addEventListener('submit', function(event) {
+                fileSelect.addEventListener('change', function(event) {
                     event.preventDefault();
                     console.log("Caught event");
 
@@ -51,17 +60,17 @@ jspattern = """ <script>
                     if (fileList && fileList.length == 0) {
                         return;
                     }
-                    uploadButton.innerHTML = "Uploading...";
+
                     var formData = new FormData();
                     for (var i=0; i<fileList.length; i++) {
                         var f = fileList[i];
                         formData.append("files_"+i, f, f.name);
                     }
                     xhr = new XMLHttpRequest();
-                    xhr.open('POST', form.action);
+                    xhr.open('POST', curdir.value);
                     xhr.onload = function() {
                         if (xhr.status == 200) {
-                            uploadButton.innerHTML = "Upload";
+                            //uploadButton.innerHTML = "Upload";
                             window.location.reload(true);
                         } else {
                             msg.innerHTML = "Error: " + xhr.status
@@ -80,7 +89,7 @@ body {
     background: #007399;
     font-family: "arial", "helvetica", "sans-serif";
     font-size: large;
-    color: white;
+    color: #eeeeee;
 }
 
 a:link {
@@ -99,11 +108,13 @@ a:visited {
 #dirarea {
     float:left;
     overflow: auto;
-    width: 40%;
+    min-width: 10%;
+    max-width: 40%;
 }
 
 #filearea {
     overflow: auto;
+    max-width: 60%;
 }
 
 .diritem {
@@ -138,6 +149,22 @@ a:visited {
 
 .boxed {
     box-shadow: 0 5px 5px 0 #001a66;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+#uplbtn {
+    width: 10%;
+    text-align: center;
+    background: #3377ff;
+    margin-top: 5px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 10px;
 }
 </style>
 """
@@ -174,11 +201,11 @@ def dirlstpage(pth, dirs, files):
 </head>
 <body>
 <div id='topstrip'>
- <!-- <form id="formupload" action="upload" method="POST" enctype="multipart/form-data"> -->
-    <form id="formupload" action="{0}" method="POST" enctype="multipart/form-data">
-        Choose files: <input type="file" id="fileinput" multiple />
-        <button type="submit" id="uplbtn">Upload</button>
-    </form>
+    <input type="hidden" value='{0}' id='curdir' />
+    <label>
+        <input type="file" id="fileinput" multiple>
+        <div id="uplbtn">Upload to this directory</div>
+    </label>
     <div id="statusmsg"></div>
 </div>
 <h3>Contents of '{0}'</h3>
@@ -332,7 +359,6 @@ def ul_serve(env, start_response):
             return get_uploaded_files(start_response, env, fullpath)
         else:
             return send_error(start_response, "400 BAD REQUEST", target, "Cannot upload to a file.")
-
 
 
 def get_cli_arguments(argv):
