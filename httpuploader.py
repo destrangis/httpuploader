@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import base64
 import mimetypes
 import pathlib
 import traceback
@@ -274,6 +275,21 @@ def send_file(startresp, pfile):
     startresp("200 OK", headers)
     return FileWrapper(pfile.open("rb"))
 
+def send_favicon(startresp):
+    enc_fav = (b'000310RRvX5C8!H1OO-j000&M001Ze000mG001BW000311ONa4004'
+               b'jh0000000000000mG0000000000004r5f&c>p0sz+5)&Kwi000000'
+               b'00000000000000000000000000000000000000000000000000000'
+               b'000000000000000000002A|fIpAOHXYA|fIpAOHXYA|fIpAOHXW00'
+               b'0000000003sp)0000003sp)0000003sp)0000003sp)0000003sp)'
+               b'00002A|fIpAOHXZA|fIpFaQ7m0U{z00000005T&00000000000009'
+               b'6000960007_z007_z007_z00960008_y008_y008_y008_y008_y0'
+               b'07_z007_z008(O008_y00960000')
+    favicon = base64.b85decode(enc_fav)
+    headers = [ ("Content-lenght", str(len(favicon))),
+                ("Content-type", "image/x-icon"),
+                ("Content-disposition", "attachment; filename=favicon.ico") ]
+    startresp("200 OK", headers)
+    return [ favicon ]
 
 def human_size(size):
     units = [ "KB", "MB", "GB", "TB" ]
@@ -341,6 +357,9 @@ def ul_serve(env, start_response):
     target = env.get("PATH_INFO").strip("/")
     if target == "":
         target = options["rootdir"]
+
+    if target == "favicon.ico":
+        return send_favicon(start_response)
 
     pth = pathlib.Path(target)
     if not check_valid(pth):
