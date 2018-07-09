@@ -299,10 +299,10 @@ def human_size(size):
         lastn = n
         n = n / 1024
         if n < 1:
-            return "{0:.5g} {1}".format(lastn, lastu)
+            return "{0:.2f} {1}".format(lastn, lastu)
         lastu = u
     else:
-        return "{0:.5g} {1}".format(n, lastu)
+        return "{0:.2f} {1}".format(n, lastu)
 
 
 def contents(pdir):
