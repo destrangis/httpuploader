@@ -222,13 +222,13 @@ def dirlstpage(pth, dirs, files):
 """
     dirptn = "<div class='diritem'><a href='{0!s}'>{1!s}</a></div><br>\n"
     fileptn = "<div class='fileitem'><a href='{0!s}'>{1!s}</a>&nbsp;<span class='filesize'>{2}</span></div>\n"
-
-    if pth == options["rootdir"]:
+    rootfull = options["rootdir"].resolve()
+    if pth == rootfull:
         updir = "/"
     else:
-        updir = "/" / pth.parents[0].relative_to(options["rootdir"])
+        updir = "/" / pth.parents[0].relative_to(rootfull)
 
-    relpath = pth.relative_to(options["rootdir"])
+    relpath = pth.relative_to(rootfull)
 
     htdirlst = ""
     for dir1 in dirs:
@@ -292,14 +292,14 @@ def human_size(size):
 def contents(pdir):
     dirs = []
     files = []
-    with os.scandir(pdir) as lst:
-        for entry in lst:
-            if entry.is_dir():
-                dirs.append(entry.name)
-            else:
-                stat = entry.stat()
-                szstr = human_size(stat.st_size)
-                files.append( (entry.name, szstr) )
+    lst = os.scandir(str(pdir))
+    for entry in lst:
+        if entry.is_dir():
+            dirs.append(entry.name)
+        else:
+            stat = entry.stat()
+            szstr = human_size(stat.st_size)
+            files.append( (entry.name, szstr) )
     return pdir, sorted(dirs), sorted(files)
 
 
@@ -378,5 +378,5 @@ if __name__ == "__main__":
     port = options["port"] = args.port
     options["rootdir"] = args.rootdir
     print("Listening on port {0}".format(port), file=sys.stderr)
-    with make_server("", port, ul_serve) as srv:
-        srv.serve_forever()
+    srv = make_server("", port, ul_serve)
+    srv.serve_forever()
