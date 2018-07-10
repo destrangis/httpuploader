@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""Simple directory listing http server that also allows to upload
+files.
+"""
+
 import os
 import sys
 import argparse
@@ -7,10 +12,6 @@ import pathlib
 import traceback
 from cgi import FieldStorage
 from wsgiref.util import FileWrapper
-
-"""Simple directory listing http server that also allows to upload
-files.
-"""
 
 CHUNKSIZE = 65536    # 64KB
 
