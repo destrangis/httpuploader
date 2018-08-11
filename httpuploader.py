@@ -391,11 +391,15 @@ def get_cli_arguments(argv):
 
     return parser.parse_args(argv)
 
+
 if __name__ == "__main__":
-    from wsgiref.simple_server import make_server
+    from wsgiref.simple_server import make_server, WSGIServer
+    from socketserver import ThreadingMixIn
+    class MTServer(ThreadingMixIn, WSGIServer): pass
+
     args = get_cli_arguments(sys.argv[1:])
     port = options["port"] = args.port
     options["rootdir"] = args.rootdir
+    srv = make_server("", port, ul_serve, server_class=MTServer)
     print("Listening on port {0}".format(port), file=sys.stderr)
-    srv = make_server("", port, ul_serve)
     srv.serve_forever()
