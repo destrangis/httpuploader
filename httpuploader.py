@@ -425,8 +425,6 @@ def ul_serve(env, start_response):
     """
     method = env["REQUEST_METHOD"]
     target = env.get("PATH_INFO").strip("/")
-    if target == "":
-        target = options["rootdir"]
 
     if target == "favicon.ico":
         return send_favicon(start_response)
@@ -465,14 +463,18 @@ def get_cli_arguments(argv):
     return parser.parse_args(argv)
 
 
-if __name__ == "__main__":
+def main(argv):
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
     class MTServer(ThreadingMixIn, WSGIServer): pass
 
-    args = get_cli_arguments(sys.argv[1:])
+    args = get_cli_arguments(argv)
     port = options["port"] = args.port
     options["rootdir"] = args.rootdir
     srv = make_server("", port, ul_serve, server_class=MTServer)
     print("Listening on port {0}".format(port), file=sys.stderr)
     srv.serve_forever()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
