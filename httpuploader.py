@@ -20,70 +20,88 @@ options = {
 }
 
 
-jspattern = """ <script>
-            (function(document, window, undefined) {
+jspattern = """<script>
+    (function(document, window, undefined) {
 
-                function boxToggle(event) {
-                            if (event.target.tagName == "DIV") {
-                                event.target.classList.toggle("boxed");
-                            }
-                        }
-                function setBoxable(itemlst) {
-                    for (var i = 0; i < itemlst.length; i++) {
-                        var item = itemlst[i];
-                        item.addEventListener('mouseenter', boxToggle, true);
-                        item.addEventListener('mouseleave', boxToggle, true);
+        function boxToggle(event) {
+                    if (event.target.tagName == "DIV") {
+                        event.target.classList.toggle("boxed");
                     }
                 }
+        function setBoxable(itemlst) {
+            for (var i = 0; i < itemlst.length; i++) {
+                var item = itemlst[i];
+                item.addEventListener('mouseenter', boxToggle, true);
+                item.addEventListener('mouseleave', boxToggle, true);
+            }
+        }
 
 
-                var fileSelect = document.getElementById('fileinput');
-                var uploadButton = document.getElementById('uplbtn');
-                var msg = document.getElementById('statusmsg');
-                var curdir = document.getElementById('curdir');
+        var fileSelect = document.getElementById('fileinput');
+        var topRowBtns = document.getElementsByClassName('toprowbutton');
+        var msg = document.getElementById('statusmsg');
+        var curdir = document.getElementById('curdir');
+        var mkdirbtn = document.getElementById('mkdirbtn');
+        var dirinput = document.getElementById('dirinput');
+        var sendmkdir = document.getElementById('sendmkdir');
 
-                uploadButton.addEventListener('mouseenter', function() {
-                        uploadButton.style.background = "#6699ff";
-                        uploadButton.classList.toggle("boxed");
+        for (var i = 0; i < topRowBtns.length; i++) {
+            (function(button) {
+                button.addEventListener('mouseenter', function() {
+                        button.style.background = "#6699ff";
+                        button.classList.toggle("boxed");
                     }, true);
-                uploadButton.addEventListener('mouseleave', function() {
-                        uploadButton.style.background = "#3377ff";
-                        uploadButton.classList.toggle("boxed");
+                button.addEventListener('mouseleave', function() {
+                        button.style.background = "#3377ff";
+                        button.classList.toggle("boxed");
                     }, true);
+            })(topRowBtns[i]);
+        }
 
-                setBoxable(document.getElementsByClassName("diritem"));
-                setBoxable(document.getElementsByClassName("fileitem"));
+        setBoxable(document.getElementsByClassName("diritem"));
+        setBoxable(document.getElementsByClassName("fileitem"));
 
-                fileSelect.addEventListener('change', function(event) {
-                    event.preventDefault();
-                    console.log("Caught event");
+        mkdirbtn.addEventListener('click', function(event) {
+            dirinput.classList.toggle("invisible");
+        });
 
-                    var fileList = fileSelect.files;
-                    if (fileList && fileList.length == 0) {
-                        return;
-                    }
+        dirinput.addEventListener('change', function(event) {
+            var dirname = dirinput.value;
+            dirinput.classList.toggle("invisible");
+            dirinput.value = '';
+            sendmkdir.submit();
+        });
 
-                    var formData = new FormData();
-                    for (var i=0; i<fileList.length; i++) {
-                        var f = fileList[i];
-                        formData.append("files_"+i, f, f.name);
-                    }
-                    xhr = new XMLHttpRequest();
-                    xhr.open('POST', curdir.value);
-                    xhr.onload = function() {
-                        if (xhr.status == 200) {
-                            //uploadButton.innerHTML = "Upload";
-                            window.location.reload(true);
-                        } else {
-                            msg.innerHTML = "Error: " + xhr.status
-                                            + " " + xht.statusText;
-                        }
-                    };
-                    xhr.send(formData);
-                }, true);
+        fileSelect.addEventListener('change', function(event) {
+            event.preventDefault();
+            console.log("Caught event");
 
-            })(document, window)
-        </script>
+            var fileList = fileSelect.files;
+            if (fileList && fileList.length == 0) {
+                return;
+            }
+
+            var formData = new FormData();
+            for (var i=0; i<fileList.length; i++) {
+                var f = fileList[i];
+                formData.append("files_"+i, f, f.name);
+            }
+            xhr = new XMLHttpRequest();
+            xhr.open('POST', curdir.value);
+            xhr.onload = function() {
+                if (xhr.status == 200) {
+                    //uploadButton.innerHTML = "Upload";
+                    window.location.reload(true);
+                } else {
+                    msg.innerHTML = "Error: " + xhr.status
+                                    + " " + xht.statusText;
+                }
+            };
+            xhr.send(formData);
+        }, true);
+
+    })(document, window)
+</script>
 """
 
 csspattern = """<style>
@@ -105,6 +123,8 @@ a:visited {
 }
 
 #topstrip {
+    display: flex;
+    width: 100%;
 }
 
 #dirarea {
@@ -157,11 +177,25 @@ input[type="file"] {
     display: none;
 }
 
-#uplbtn {
+.invisible {
+    display: none;
+}
+
+#dirinput {
+    background: #007399;
+    width: 25%;
+    margin: 30px 0 0 30px;
+    padding: 5px;
+    position: absolute;
+}
+
+
+.toprowbutton {
     width: 10%;
     text-align: center;
     background: #3377ff;
     margin-top: 5px;
+    margin-right: 5px;
     padding-top: 5px;
     padding-bottom: 5px;
     padding-left: 15px;
@@ -202,11 +236,19 @@ def dirlstpage(pth, dirs, files):
 <title>Contents of {0}</title>
 </head>
 <body>
-<div id='topstrip'>
-    <input type="hidden" value='{0}' id='curdir' />
-    <label>
-        <input type="file" id="fileinput" multiple>
-        <div id="uplbtn">Upload to this directory</div>
+<div class="invisible boxed" id="dirinput">
+    <form id="sendmkdir" action="mkdir" method="post">
+    <span>Enter directory name:<span>
+    <input type="text" name="dir" size="40" />
+    <input type="hidden" name="curdir" value="{0}" />
+    </form>
+</div>
+<div id="topstrip">
+    <div class="toprowbutton" id="mkdirbtn">Create directory here</div>
+    <input value="." id="curdir" type="hidden">
+    <label  class="toprowbutton">
+        <input id="fileinput" multiple="" type="file">
+        <div id="uplbtn" >Upload to this directory</div>
     </label>
     <div id="statusmsg"></div>
 </div>
@@ -335,6 +377,33 @@ def get_uploaded_files(startresp, env, path):
     return send_dirlist(startresp, path)
 
 
+def send_mkdir(startresp, env, root):
+    fs = FieldStorage(fp=env["wsgi.input"], environ=env)
+    if "dir" not in fs or "curdir" not in fs:
+        startresp("400 Bad Request", [])
+        return [ errorpage("400 Bad Request", "Incorrect form",
+            "Form posted with missing fields.", "") ]
+
+    newdir = root / fs["curdir"].value / fs["dir"].value
+    return create_directory(startresp, env, newdir, fs["curdir"].value)
+
+
+def create_directory(startresp, env, path, curdir):
+    try:
+        path.mkdir()
+    except Exception:
+        x, m, tb = sys.exc_info()
+        startresp("500 Bad Gateway", [])
+        return [ errorpage("500 Bad Gateway", x.__name__, str(m),
+                            "".join(traceback.format_tb(tb))) ]
+
+    if curdir[0] == '.':
+        curdir = '/' + curdir[1:]
+    startresp("303 See other",
+                [("Location", curdir), ])
+    return []
+
+
 def send_error(startresp, *args):
     startresp(args[0], [])
     return [ errorpage(*args) ]
@@ -361,6 +430,9 @@ def ul_serve(env, start_response):
 
     if target == "favicon.ico":
         return send_favicon(start_response)
+
+    if target == "mkdir":
+        return send_mkdir(start_response, env, options["rootdir"])
 
     pth = pathlib.Path(target)
     if not check_valid(pth):
