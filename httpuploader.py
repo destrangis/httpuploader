@@ -74,7 +74,6 @@ jspattern = """<script>
 
         fileSelect.addEventListener('change', function(event) {
             event.preventDefault();
-            console.log("Caught event");
 
             var fileList = fileSelect.files;
             if (fileList && fileList.length == 0) {
@@ -94,7 +93,7 @@ jspattern = """<script>
                     window.location.reload(true);
                 } else {
                     msg.innerHTML = "Error: " + xhr.status
-                                    + " " + xht.statusText;
+                                    + " " + xhr.statusText;
                 }
             };
             xhr.send(formData);
@@ -237,15 +236,15 @@ def dirlstpage(pth, dirs, files):
 </head>
 <body>
 <div class="invisible boxed" id="dirinput">
-    <form id="sendmkdir" action="mkdir" method="post">
-    <span>Enter directory name:<span>
+    <form id="sendmkdir" action="/mkdir" method="post">
+    <span>Enter directory name:</span>
     <input type="text" name="dir" size="40" />
-    <input type="hidden" name="curdir" value="{0}" />
+    <input id="curdir" type="hidden" name="curdir" value="{0}" />
     </form>
 </div>
 <div id="topstrip">
     <div class="toprowbutton" id="mkdirbtn">Create directory here</div>
-    <input value="." id="curdir" type="hidden">
+    <input type="hidden" name="curdir" value="." />
     <label  class="toprowbutton">
         <input id="fileinput" multiple="" type="file">
         <div id="uplbtn" >Upload to this directory</div>
@@ -284,7 +283,7 @@ def dirlstpage(pth, dirs, files):
         full =  "/" / relpath / fil1
         htfilelst += fileptn.format(full, fil1, sz)
 
-    return pattern.format(relpath, updir, htdirlst, htfilelst, csspattern, jspattern).encode()
+    return pattern.format("/" / relpath, updir, htdirlst, htfilelst, csspattern, jspattern).encode()
 
 
 def send_dirlist(startresp, pth):
@@ -384,7 +383,12 @@ def send_mkdir(startresp, env, root):
         return [ errorpage("400 Bad Request", "Incorrect form",
             "Form posted with missing fields.", "") ]
 
-    newdir = root / fs["curdir"].value / fs["dir"].value
+    dir = fs["dir"].value
+    curdir = fs["curdir"].value
+    if curdir.startswith("/"):
+        curdir = curdir[1:]
+
+    newdir = root / curdir / dir
     return create_directory(startresp, env, newdir, fs["curdir"].value)
 
 
@@ -463,10 +467,13 @@ def get_cli_arguments(argv):
     return parser.parse_args(argv)
 
 
-def main(argv):
+def main(argv=None):
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
     class MTServer(ThreadingMixIn, WSGIServer): pass
+
+    if argv is None:
+        argv = sys.argv[1:]
 
     args = get_cli_arguments(argv)
     port = options["port"] = args.port
