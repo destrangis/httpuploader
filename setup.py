@@ -14,7 +14,7 @@ setup(
     },
     author="Javier Llopis",
     author_email="javier@llopis.me",
-    url="http://mikrodev:3000/javier/httpuploader",
+    url="https://github.com/destrangis/httpuploader",
     description="A directory listing server that accepts file uploads.",
     long_description=long_descr,
     classifiers='''Programming Language :: Python
