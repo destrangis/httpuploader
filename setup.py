@@ -17,18 +17,19 @@ setup(
     url="https://github.com/destrangis/httpuploader",
     description="A directory listing server that accepts file uploads.",
     long_description=long_descr,
-    classifiers='''Programming Language :: Python
-    Programming Language :: Python :: 3 :: Only
-    License :: OSI Approved :: MIT License
-    Development Status :: 4 - Beta
-    Environment :: Console
-    Environment :: Web Environment
-    Intended Audience :: End Users/Desktop
-    Intended Audience :: Developers
-    Intended Audience :: System Administrators
-    Operating System :: OS Independent
-    Topic :: Internet :: WWW/HTTP
-    Topic :: Internet :: WWW/HTTP :: WSGI
-    Topic :: Internet :: WWW/HTTP :: WSGI :: Application
-    '''
+    classifiers=[
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: WSGI",
+    "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
+    ]
 )
