@@ -16,6 +16,7 @@ setup(
     author_email="javier@llopis.me",
     url="https://github.com/destrangis/httpuploader",
     description="A directory listing server that accepts file uploads.",
+    long_description_content_type="text/x-rst",
     long_description=long_descr,
     classifiers=[
     "Programming Language :: Python",
