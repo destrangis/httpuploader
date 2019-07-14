@@ -7,7 +7,7 @@ with open("README.rst") as readme:
 
 setup(
     name="httpuploader",
-    version="0.1.0",
+    version="0.1.1",
     py_modules=["httpuploader"],
     entry_points = {
         'console_scripts': ['httpuploader=httpuploader:main'],

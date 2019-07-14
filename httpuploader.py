@@ -385,7 +385,7 @@ def send_mkdir(startresp, env, root):
 
     dir = fs["dir"].value
     curdir = fs["curdir"].value
-    if curdir.startswith("/"):
+    if curdir.startswith(os.sep):
         curdir = curdir[1:]
 
     newdir = root / curdir / dir
