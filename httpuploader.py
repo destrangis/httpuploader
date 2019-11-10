@@ -1,11 +1,16 @@
 import argparse
+import io
 import json
 import mimetypes
+import os
 import pathlib
 import sys
+import tarfile
 import traceback
+import zipfile
 from wsgiref.util import FileWrapper
 from urllib.parse import parse_qs
+from tempfile import TemporaryFile
 
 
 class HTUPLError(Exception):
@@ -62,6 +67,14 @@ class API:
                 self.__class__.__name__
             )
         )
+
+    def response_json(self, rc, msg, data=None):
+        return {
+            "rc": rc,
+            "msg": msg,
+            "version": self.version,
+            "data": data if data is not None else {},
+        }
 
 
 class APIv1(API):
@@ -196,7 +209,7 @@ class APIv1(API):
             return node
 
         rtarget = path.resolve().relative_to(self.topdir)
-        rspdict = {"rc": 200, "msg": "OK", "version": self.version, "data": {}}
+        rspdict = self.response_json(200, "OK")
         listdirs = []
         listfiles = []
         for item in path.iterdir():
@@ -238,7 +251,65 @@ class APIv1(API):
         self.result = [json.dumps(rspdict, indent=2).encode()]
 
     def dir_archive(self, path, args):
-        pass
+        fmt = args.get("format", ["zip"])[0]
+        if fmt == "zip":
+            self.zip_archive(path)
+        elif fmt == "tar.gz":
+            self.tar_archive(path)
+        else:
+            resp = self.response_json(
+                400,
+                "Bad request",
+                {"extra": "Directory archive. Bad format {}".format(fmt)},
+            )
+            self.headers = [("Content-type", "application/json")]
+            self.response = "400 Bad request"
+            self.result = [json.dumps(resp, indent=2).encode()]
+
+    def zip_archive(self, path):
+        tfd = TemporaryFile()
+        with zipfile.ZipFile(tfd, "w", zipfile.ZIP_DEFLATED) as zp:
+            for dp, dirs, filenames in os.walk(path):
+                for filename in filenames:
+                    fullfile = pathlib.Path(dp) / filename
+                    relfile = fullfile.relative_to(path)
+                    zp.write(str(fullfile.resolve()), str(relfile))
+        tfd.seek(0, io.SEEK_END)
+        size = tfd.tell()
+        tfd.seek(0)
+        arch_name = path.name if path.name else "top"
+        resp = self.response_json(200, "OK")
+        self.response = "200 OK"
+        self.headers = [
+            ("Content-length", str(size)),
+            ("Content-type", "  application/zip"),
+            ("Content-disposition", "attachment; filename=" + arch_name + ".zip"),
+        ]
+        self.result = FileWrapper(tfd)
+
+    def tar_archive(self, path):
+        fullpath = path.resolve()
+        tfd = TemporaryFile()
+        tarfd = tarfile.open(fileobj=tfd, mode="x:gz")
+        with os.scandir(fullpath) as scd:
+            for entry in scd:
+                fullname = fullpath / entry.name
+                relname = fullname.relative_to(fullpath)
+                tarfd.add(str(fullname), str(relname))
+        tarfd.close()
+
+        tfd.seek(0, io.SEEK_END)
+        size = tfd.tell()
+        tfd.seek(0)
+        arch_name = path.name if path.name else "top"
+        resp = self.response_json(200, "OK")
+        self.response = "200 OK"
+        self.headers = [
+            ("Content-length", str(size)),
+            ("Content-type", "application/gzip"),
+            ("Content-disposition", "attachment; filename=" + arch_name + ".tar.gz"),
+        ]
+        self.result = FileWrapper(tfd)
 
     def mkdir(self, path, args):
         pass
@@ -384,7 +455,7 @@ class WSGIApp:
                 400, "Bad request", "Bad URL (query string only allowed on API calls)"
             )
 
-        pathname = pathlib.Path(objloc)
+        pathname = self.topdir / objloc
         return version, pathname, qdict
 
     def __call__(self, env, start_response):
