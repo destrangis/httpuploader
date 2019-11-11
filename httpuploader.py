@@ -4,6 +4,7 @@ import json
 import mimetypes
 import os
 import pathlib
+import shutil
 import sys
 import tarfile
 import traceback
@@ -336,7 +337,10 @@ class APIv1(API):
             self.result = [json.dumps(resp, indent=2).encode()]
 
     def deldir(self, path, args):
-        pass
+        def handle_rmdir_errors(func, name, exc_info):
+            info = traceback.format_exception(*exc_info)
+            raise HTUPLError(500, "Cannot remove dir '{}'".format(name), info)
+        shutil.rmtree(path, False, handle_rmdir_errors)
 
     def download_file(self, pfile, args):
         stinfo = pfile.stat()
