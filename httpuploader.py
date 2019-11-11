@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import io
 import json
 import mimetypes
@@ -261,9 +262,9 @@ class APIv1(API):
     def dir_archive(self, path, args):
         fmt = args.get("format", ["zip"])[0]
         if fmt == "zip":
-            self.zip_archive(path)
+            self.compress(path, self.zip_archiver, ".zip", "application/zip")
         elif fmt == "tar.gz":
-            self.tar_archive(path)
+            self.compress(path, self.tar_archiver, ".tar.gz", "application/gzip")
         else:
             resp = self.response_json(
                 400,
@@ -274,50 +275,23 @@ class APIv1(API):
             self.response = "400 Bad request"
             self.result = [json.dumps(resp, indent=2).encode()]
 
-    def zip_archive(self, path):
-        tfd = TemporaryFile()
-        with zipfile.ZipFile(tfd, "w", zipfile.ZIP_DEFLATED) as zp:
+    def zip_archiver(self, path, fileobj):
+        with zipfile.ZipFile(fileobj, "w", zipfile.ZIP_DEFLATED) as zp:
             for dp, dirs, filenames in os.walk(path):
                 for filename in filenames:
                     fullfile = pathlib.Path(dp) / filename
                     relfile = fullfile.relative_to(path)
                     zp.write(str(fullfile.resolve()), str(relfile))
-        tfd.seek(0, io.SEEK_END)
-        size = tfd.tell()
-        tfd.seek(0)
-        arch_name = path.name if path.name else "top"
-        resp = self.response_json(200, "OK")
-        self.response = "200 OK"
-        self.headers = [
-            ("Content-length", str(size)),
-            ("Content-type", "  application/zip"),
-            ("Content-disposition", "attachment; filename=" + arch_name + ".zip"),
-        ]
-        self.result = FileWrapper(tfd)
 
-    def tar_archive(self, path):
-        fullpath = path.resolve()
-        tfd = TemporaryFile()
+    def tar_archiver(self, path, tfd):
         tarfd = tarfile.open(fileobj=tfd, mode="x:gz")
-        with os.scandir(fullpath) as scd:
+        with os.scandir(path) as scd:
             for entry in scd:
-                fullname = fullpath / entry.name
-                relname = fullname.relative_to(fullpath)
+                fullname = path / entry.name
+                relname = fullname.relative_to(path)
                 tarfd.add(str(fullname), str(relname))
         tarfd.close()
 
-        tfd.seek(0, io.SEEK_END)
-        size = tfd.tell()
-        tfd.seek(0)
-        arch_name = path.name if path.name else "top"
-        resp = self.response_json(200, "OK")
-        self.response = "200 OK"
-        self.headers = [
-            ("Content-length", str(size)),
-            ("Content-type", "application/gzip"),
-            ("Content-disposition", "attachment; filename=" + arch_name + ".tar.gz"),
-        ]
-        self.result = FileWrapper(tfd)
 
     def mkdir(self, path, args):
         try:
@@ -360,7 +334,45 @@ class APIv1(API):
         self.result = FileWrapper(pfile.open("rb"))
 
     def compress_file(self, path, args):
-        pass
+        fmt = args.get("format", ["zip"])[0]
+        cmethods = {
+            "gz": (self.gz_writer, ".gz", "application/gzip"),
+            "zip": (self.zip_writer, ".zip", "application/zip"),
+            }
+        wrt, ext, mimetype = cmethods[fmt]
+        self.compress(path, wrt, ext, mimetype)
+
+
+    def compress(self, path, writer, ext, mimetype):
+        tf = TemporaryFile()
+
+        writer(path, tf)
+
+        tf.seek(0, io.SEEK_END)
+        size = tf.tell()
+        tf.seek(0)
+        name = path.name if path.name else "top"
+        resp = self.response_json(200, "OK")
+        self.response = "200 OK"
+        self.headers = [
+            ("Content-length", str(size)),
+            ("Content-type", mimetype),
+            ("Content-disposition", "attachment; filename=" + name + ext),
+        ]
+        self.result = FileWrapper(tf)
+
+    def gz_writer(self, path, tf):
+        with path.open("rb") as pfd:
+            with gzip.GzipFile(mode="wb", fileobj=tf) as gz:
+                chunk = pfd.read(CHUNKSIZE)
+                while chunk:
+                    gz.write(chunk)
+                    chunk = pfd.read(CHUNKSIZE)
+
+    def zip_writer(self, path, fileobj):
+        with zipfile.ZipFile(fileobj, "w", zipfile.ZIP_DEFLATED) as zp:
+            zp.write(str(path.resolve()), path.name)
+
 
     def file_info(self, path, args):
         pass
