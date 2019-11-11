@@ -11,6 +11,10 @@ import zipfile
 from wsgiref.util import FileWrapper
 from urllib.parse import parse_qs
 from tempfile import TemporaryFile
+from cgi import FieldStorage
+from pprint import pformat
+
+CHUNKSIZE = 65536  # 64KB
 
 
 class HTUPLError(Exception):
@@ -80,7 +84,8 @@ class API:
 class APIv1(API):
     version = "1.0.0"
 
-    def __init__(self, topdir, hidden_files=False):
+    def __init__(self, env, topdir, hidden_files=False):
+        self.env = env
         self.topdir = topdir
         self.hidden_files = hidden_files
 
@@ -111,7 +116,7 @@ class APIv1(API):
         cmd = callmap["cmd"]
         path = callmap["path"]
         args = callmap["args"]
-        if path.is_dir():
+        if path.is_dir() or cmd == "mkdir" or cmd == "upload":
             ops = self.dirops
         elif path.is_file():
             ops = self.fileops
@@ -119,7 +124,9 @@ class APIv1(API):
             raise HTUPLError(
                 400,
                 "Bad request",
-                "{} {} not a directory nor a file.".format(method, path),
+                "{} not a directory nor a file. Method: '{}', Cmd: '{}', Args: {}".format(
+                    path, method, cmd, args
+                ),
             )
 
         action = ops.get((method, cmd))
@@ -312,7 +319,21 @@ class APIv1(API):
         self.result = FileWrapper(tfd)
 
     def mkdir(self, path, args):
-        pass
+        try:
+            os.makedirs(path)
+        except FileExistsError:
+            resp = self.response_json(
+                400,
+                "Bad request",
+                {
+                    "extra": "Directory '{}' already exists".format(
+                        path.relative_to(self.topdir)
+                    )
+                },
+            )
+            self.response = "400 Bad request"
+            self.headers = [("Content-type", "application/json")]
+            self.result = [json.dumps(resp, indent=2).encode()]
 
     def deldir(self, path, args):
         pass
@@ -344,7 +365,31 @@ class APIv1(API):
         pass
 
     def upload(self, path, args):
-        pass
+        content_type = self.env.get("CONTENT_TYPE", "")
+        if content_type.startswith("multipart/form-data"):
+            fs = FieldStorage(fp=self.env["wsgi.input"], environ=self.env)
+            for key in fs:
+                if fs[key].file:
+                    pn = path / fs[key].filename
+                    with pn.open("wb") as saved:
+                        while 1:
+                            chunk = fs[key].file.read(CHUNKSIZE)
+                            if len(chunk) > 0:
+                                saved.write(chunk)
+                            else:
+                                break
+        else:
+            fp = self.env["wsgi.input"]
+            content_length = int(self.env.get("CONTENT_LENGTH", "0"))
+            if not content_length:
+                raise HTUPLError(400, "Bad request", "No Content-length header")
+            bytesleft = content_length
+            with path.open("wb") as outfd:
+                while bytesleft > 0:
+                    chunk = fp.read(min(CHUNKSIZE, bytesleft))
+                    bytesleft -= len(chunk)
+                    if len(chunk) > 0:
+                        outfd.write(chunk)
 
     def copy(self, path, args):
         pass
@@ -394,9 +439,11 @@ class WSGIApp:
           <body>
             <h3>Hello World</h3>
             <p>{}</p>
+            <br/>
+            <pre>{}</pre>
           </body>
         </html>""".format(
-            startdir
+            startdir, pformat(self.env)
         )
         self.start_response("200 OK", [("Content-type", "text/html")])
         return [html.encode()]
@@ -430,7 +477,7 @@ class WSGIApp:
 
     def dispatch_api_call(self, apidict, method):
         version_tpl, APIClass = API.find_version(apidict["version"])
-        api = APIClass(self.topdir, self.hidden_files)
+        api = APIClass(self.env, self.topdir, self.hidden_files)
         api.run(apidict, method)
 
         self.start_response(api.response, api.headers)
