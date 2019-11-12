@@ -390,7 +390,7 @@ class APIv1(API):
         data["checksum"] = chksum.hexdigest()
         data["filename"] = path.name
         if match:
-            data["match"] = match == data["checksum"]
+            data["match"] = match.lower() == data["checksum"]
 
         rsp = self.response_json(200, "OK", data)
         self.response = "200 OK"
@@ -426,10 +426,38 @@ class APIv1(API):
                         outfd.write(chunk)
 
     def copy(self, path, args):
-        pass
+        relpath = path.relative_to(self.topdir)
+        dest = args.get("dest", [""])[0]
+        if not dest:
+            raise HTUPLError(400, "Bad request", { "extra": "Destination not specified. cmd='copy' path='/{}'"
+                            .format(relpath)})
+        if dest[0] == "/":
+            dest = dest[1:]
+        destpath = self.topdir / dest
+        reldest = destpath.resolve().relative_to(self.topdir)
+        try:
+            shutil.copyfile(path, destpath)
+        except shutil.SameFileError:
+            raise HTUPLError(400, "Bad request", { "extra": "Destination and source are the same. cmd='copy' path='/{}' "
+                                    "dest='{}'".format(relpath, reldest)})
+        except OSError:
+            raise HTUPLError(400, "Bad request", { "extra": "Cannot write to destination. cmd='copy' path='/{}' "
+                                    "dest='{}'".format(path.relative_to(self.topdir), reldest)})
+
 
     def move(self, path, args):
-        pass
+        relpath = path.relative_to(self.topdir)
+        dest = args.get("dest", [""])[0]
+        if not dest:
+            raise HTUPLError(400, "Bad request", { "extra": "Destination not specified. cmd='move' path='/{}'"
+                            .format(relpath)})
+        if dest[0] == "/":
+            dest = dest[1:]
+        destpath = self.topdir / dest
+
+        shutil.move(str(path), str(destpath))
+
+
 
     def delfile(self, path, args):
         path.unlink()
