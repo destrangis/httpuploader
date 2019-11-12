@@ -1,5 +1,6 @@
 import argparse
 import gzip
+import hashlib
 import io
 import json
 import mimetypes
@@ -377,7 +378,25 @@ class APIv1(API):
         pass
 
     def checksum(self, path, args):
-        pass
+        match = args.get("match", [""])[0]
+        chksum = hashlib.sha256()
+        with path.open("rb") as fd:
+            chunk = fd.read(CHUNKSIZE)
+            while chunk:
+                chksum.update(chunk)
+                chunk = fd.read(CHUNKSIZE)
+
+        data = {}
+        data["checksum"] = chksum.hexdigest()
+        data["filename"] = path.name
+        if match:
+            data["match"] = match == data["checksum"]
+
+        rsp = self.response_json(200, "OK", data)
+        self.response = "200 OK"
+        self.headers = [("Content-type", "application/json")]
+        self.result = [ json.dumps(rsp, indent=2).encode() ]
+
 
     def upload(self, path, args):
         content_type = self.env.get("CONTENT_TYPE", "")
