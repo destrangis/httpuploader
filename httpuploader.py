@@ -84,7 +84,7 @@ class API:
         return {
             "rc": rc,
             "msg": msg,
-            "version": self.version,
+            "api_version": self.version,
             "data": data if data is not None else {},
         }
 
