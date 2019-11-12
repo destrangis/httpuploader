@@ -18,6 +18,8 @@ from pprint import pformat
 
 CHUNKSIZE = 65536  # 64KB
 
+MODULE_VERSION = "1.0.0"
+
 
 class HTUPLError(Exception):
     def __init__(self, errno, msg, extra):

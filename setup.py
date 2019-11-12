@@ -2,12 +2,14 @@
 
 from setuptools import setup
 
+from httpuploader import MODULE_VERSION
+
 with open("README.rst") as readme:
     long_descr = readme.read()
 
 setup(
     name="httpuploader",
-    version="0.1.1",
+    version=MODULE_VERSION,
     py_modules=["httpuploader"],
     entry_points = {
         'console_scripts': ['httpuploader=httpuploader:main'],
