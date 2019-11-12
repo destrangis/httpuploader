@@ -127,7 +127,7 @@ class APIv1(API):
                 400,
                 "Bad request",
                 "{} not a directory nor a file. Method: '{}', Cmd: '{}', Args: {}".format(
-                    path, method, cmd, args
+                    path.relative_to(self.topdir), method, cmd, args
                 ),
             )
 
@@ -135,12 +135,11 @@ class APIv1(API):
         if action:
             action(path, args)
         else:
-            self.badop(path, args, method)
-
-    def badop(self, path, args, method):
-        raise HTUPLError(
-            400, "Bad request", "{} {} cannot process.".format(method, path)
-        )
+            raise HTUPLError(
+                400,
+                "Bad request",
+                "{} {} cannot process.".format(method, path.relative_to(self.topdir)),
+            )
 
     def dir_list(self, path, args):
         def dir_node(name, hrefpath):
@@ -292,7 +291,6 @@ class APIv1(API):
                 tarfd.add(str(fullname), str(relname))
         tarfd.close()
 
-
     def mkdir(self, path, args):
         try:
             os.makedirs(path)
@@ -314,6 +312,7 @@ class APIv1(API):
         def handle_rmdir_errors(func, name, exc_info):
             info = traceback.format_exception(*exc_info)
             raise HTUPLError(500, "Cannot remove dir '{}'".format(name), info)
+
         shutil.rmtree(path, False, handle_rmdir_errors)
 
     def download_file(self, pfile, args):
@@ -338,10 +337,9 @@ class APIv1(API):
         cmethods = {
             "gz": (self.gz_writer, ".gz", "application/gzip"),
             "zip": (self.zip_writer, ".zip", "application/zip"),
-            }
+        }
         wrt, ext, mimetype = cmethods[fmt]
         self.compress(path, wrt, ext, mimetype)
-
 
     def compress(self, path, writer, ext, mimetype):
         tf = TemporaryFile()
@@ -372,7 +370,6 @@ class APIv1(API):
     def zip_writer(self, path, fileobj):
         with zipfile.ZipFile(fileobj, "w", zipfile.ZIP_DEFLATED) as zp:
             zp.write(str(path.resolve()), path.name)
-
 
     def file_info(self, path, args):
         pass
