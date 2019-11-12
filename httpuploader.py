@@ -391,11 +391,11 @@ class APIv1(API):
             "atime": atime.isoformat(),
             "mtime": mtime.isoformat(),
             "ctime": ctime.isoformat(),
-            }
+        }
         rsp = self.response_json(200, "OK", data)
         self.response = "200 OK"
         self.headers = [("Content-type", "application/json")]
-        self.result = [ json.dumps(rsp, indent=2).encode() ]
+        self.result = [json.dumps(rsp, indent=2).encode()]
 
     def calc_sha256(self, path):
         chksum = hashlib.sha256()
@@ -417,8 +417,7 @@ class APIv1(API):
         rsp = self.response_json(200, "OK", data)
         self.response = "200 OK"
         self.headers = [("Content-type", "application/json")]
-        self.result = [ json.dumps(rsp, indent=2).encode() ]
-
+        self.result = [json.dumps(rsp, indent=2).encode()]
 
     def upload(self, path, args):
         content_type = self.env.get("CONTENT_TYPE", "")
@@ -451,8 +450,15 @@ class APIv1(API):
         relpath = path.relative_to(self.topdir)
         dest = args.get("dest", [""])[0]
         if not dest:
-            raise HTUPLError(400, "Bad request", { "extra": "Destination not specified. cmd='copy' path='/{}'"
-                            .format(relpath)})
+            raise HTUPLError(
+                400,
+                "Bad request",
+                {
+                    "extra": "Destination not specified. cmd='copy' path='/{}'".format(
+                        relpath
+                    )
+                },
+            )
         if dest[0] == "/":
             dest = dest[1:]
         destpath = self.topdir / dest
@@ -460,26 +466,42 @@ class APIv1(API):
         try:
             shutil.copyfile(path, destpath)
         except shutil.SameFileError:
-            raise HTUPLError(400, "Bad request", { "extra": "Destination and source are the same. cmd='copy' path='/{}' "
-                                    "dest='{}'".format(relpath, reldest)})
+            raise HTUPLError(
+                400,
+                "Bad request",
+                {
+                    "extra": "Destination and source are the same. cmd='copy' path='/{}' "
+                    "dest='{}'".format(relpath, reldest)
+                },
+            )
         except OSError:
-            raise HTUPLError(400, "Bad request", { "extra": "Cannot write to destination. cmd='copy' path='/{}' "
-                                    "dest='{}'".format(path.relative_to(self.topdir), reldest)})
-
+            raise HTUPLError(
+                400,
+                "Bad request",
+                {
+                    "extra": "Cannot write to destination. cmd='copy' path='/{}' "
+                    "dest='{}'".format(path.relative_to(self.topdir), reldest)
+                },
+            )
 
     def move(self, path, args):
         relpath = path.relative_to(self.topdir)
         dest = args.get("dest", [""])[0]
         if not dest:
-            raise HTUPLError(400, "Bad request", { "extra": "Destination not specified. cmd='move' path='/{}'"
-                            .format(relpath)})
+            raise HTUPLError(
+                400,
+                "Bad request",
+                {
+                    "extra": "Destination not specified. cmd='move' path='/{}'".format(
+                        relpath
+                    )
+                },
+            )
         if dest[0] == "/":
             dest = dest[1:]
         destpath = self.topdir / dest
 
         shutil.move(str(path), str(destpath))
-
-
 
     def delfile(self, path, args):
         path.unlink()
