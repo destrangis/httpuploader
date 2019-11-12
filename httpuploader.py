@@ -414,7 +414,7 @@ class APIv1(API):
         pass
 
     def delfile(self, path, args):
-        pass
+        path.unlink()
 
 
 def is_hidden(path):
