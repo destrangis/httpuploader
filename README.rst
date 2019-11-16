@@ -264,3 +264,7 @@ Move or rename a file::
     POST /api/1/<path>?cmd=move&dest=<newfile>
 
 If successful, the response will be ``204 No content``
+
+License
+-------
+This software is released under the **MIT License**
