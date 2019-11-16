@@ -750,6 +750,7 @@ htmlpage = """
         <div id="errback">Back</div>
     </div>
     <div class="invisible boxed" id="dirinput">
+        <div id="dirboxclose">x</div>
         <span>Enter directory name:</span>
         <input id="direntry" type="text" name="dir" size="40" />
     </div>
@@ -882,6 +883,12 @@ input[type="file"] {
     position: absolute;
 }
 
+#dirboxclose {
+    top: 1px;
+    right: 3px;
+    font-size: small;
+    position: absolute;
+}
 
 .toprowbutton {
     width: 10%;
@@ -916,6 +923,7 @@ jsapp = """
         var uplbtn = document.getElementById('uplbtn');
         var dirinput = document.getElementById('dirinput');
         var direntry = document.getElementById('direntry');
+        var dirboxclose = document.getElementById('dirboxclose');
         var pgtitle = document.getElementById('pgtitle');
         var dirarea = document.getElementById('dirarea');
         var filearea = document.getElementById('filearea');
@@ -999,6 +1007,12 @@ jsapp = """
         }
 
         mkdirbtn.addEventListener('click', function(event) {
+            event.preventDefault();
+            dirinput.classList.toggle("invisible");
+            direntry.focus();
+        });
+
+        dirboxclose.addEventListener('click', function(event) {
             dirinput.classList.toggle("invisible");
         });
 
