@@ -16,7 +16,7 @@ a command window and runs httpuploader like this::
 
 and they now have a quick server.
 
-.. image:: Screenshot_httpuploader.png
+.. image:: https://raw.githubusercontent.com/destrangis/httpuploader/master/Screenshot_httpuploader.png
 
 Httpuploader is a single file with **no dependencies** outside the
 Python Standard Library. It is a WSGI application so that it can be
@@ -52,6 +52,10 @@ as a remote file manager, allowing not only to upload and download files
 and create directories, but to delete files and entire trees, calculate
 checksums, download compressed files and compressed archive directories,
 and copy and move on the same or different directories.
+
+It is possible to enable or disable all, some or none of the possible
+operations on either a global or per directory (or file) basis. See the
+configuration_ section.
 
 The API responds always with a JSON object with the following structure::
 
@@ -264,6 +268,63 @@ Move or rename a file::
     POST /api/1/<path>?cmd=move&dest=<newfile>
 
 If successful, the response will be ``204 No content``
+
+
+.. _configuration:
+
+Configuration
+-------------
+
+It is possible to manage permissions for each of the operations
+supported by the API on a global or per directory or file basis. These
+permissions should be specified in a Windows .ini configuration file.
+
+Each section in the .ini file has a variable called 'allow' whose contents
+are the names of the individual API commands, separated by commas, or
+the special words ``all`` or ``none`` which grant permission for all
+actions or deny them respectively.
+
+There is a ``DEFAULT`` section that contains the global commands that
+are allowed in all the directories not specified and sections for each
+directory or file for which we want different permissions. For example,
+consider the following ``.ini`` file::
+
+    [DEFAULT]
+    allow = list, download, mkdir, upload, info, checksum
+    [/dir_004]
+    allow = ${DEFAULT:allow}, compress, archive
+    [/dir_003]
+    allow = ${/dir_004:allow}
+    [/dir_003/dir_025]
+    allow = all
+    [/dir_003/dir_024/dir_026]
+    allow = none
+
+The default section applies globally and provides a restricted, but
+reasonable set of commands. The sections ``[/dir_004]`` and ``[/dir_003]``
+specify an augmented set of permissions, based on those of the default
+section. This is important: once we have a section for a directory, the
+global permissions no longer apply and we must explicitly allow all the
+command that we want. In this example we are *inheriting*
+the permissions using the *Extended Interpolation* notation provided by
+the Python ``configparser`` module.
+
+All operations will be permitted for the directory ``/dir_003/dir_025``
+and everything under it, including copying and deletion, and on
+directory ``/dir_003/dir_024/dir_026`` no operations whatsoever are
+permitted and we won't even be able to list its contents.
+
+The configuration file is specified using the ``--config cfg`` command
+line option, e.g.::
+
+    $ httpuploader --config config.ini --rootdir $HOME
+
+If no configuration file is specified, the default permissions settings
+will be::
+
+    [DEFAULT]
+    allow = list, download, mkdir, upload
+
 
 License
 -------
