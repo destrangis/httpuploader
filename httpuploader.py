@@ -18,10 +18,16 @@ from tempfile import TemporaryFile
 from cgi import FieldStorage
 from pprint import pformat
 from datetime import datetime, timedelta, timezone
+from configparser import ConfigParser, ExtendedInterpolation
 
 CHUNKSIZE = 65536  # 64KB
 
-MODULE_VERSION = "1.0.0"
+MODULE_VERSION = "1.0.1"
+
+DEFAULT_CONFIG = """
+[DEFAULT]
+allow = list, download, mkdir, upload
+"""
 
 LOCAL_TZ = datetime.now(timezone(timedelta(0))).astimezone().tzinfo
 
@@ -103,25 +109,23 @@ class APIv1(API):
         self.result = []
 
         self.dirops = {
-            ("GET", ""): self.dir_list,
             ("GET", "list"): self.dir_list,
             ("GET", "archive"): self.dir_archive,
             ("POST", "mkdir"): self.mkdir,
             ("POST", "upload"): self.upload,
-            ("DELETE", ""): self.deldir,
+            ("DELETE", "delete"): self.deldir,
         }
         self.fileops = {
-            ("GET", ""): self.download_file,
             ("GET", "download"): self.download_file,
             ("GET", "compress"): self.compress_file,
             ("GET", "info"): self.file_info,
             ("GET", "checksum"): self.checksum,
             ("POST", "copy"): self.copy,
             ("POST", "move"): self.move,
-            ("DELETE", ""): self.delfile,
+            ("DELETE", "delete"): self.delfile,
         }
 
-    def run(self, callmap, method):
+    def run(self, callmap, method, config):
         cmd = callmap["cmd"]
         path = callmap["path"]
         args = callmap["args"]
@@ -138,6 +142,23 @@ class APIv1(API):
                 ),
             )
 
+        # set default commands
+        if not cmd:
+            if method == "DELETE":
+                cmd = "delete"
+            elif method == "GET" and path.is_dir():
+                cmd = "list"
+            elif method == "GET" and path.is_file():
+                cmd = "download"
+
+        # check if operation is allowed
+        if not config.allowed(cmd, "/" / path.relative_to(self.topdir)):
+            raise HTUPLError(
+                403,
+                "Forbidden",
+                "Operation not allowed.\n{} '{}' cmd='{}'".format(method, path, cmd),
+            )
+
         action = ops.get((method, cmd))
         if action:
             action(path, args)
@@ -145,7 +166,9 @@ class APIv1(API):
             raise HTUPLError(
                 400,
                 "Bad request",
-                "{} {} cannot process.".format(method, path.relative_to(self.topdir)),
+                "{} {} unrecognized action.".format(
+                    method, path.relative_to(self.topdir)
+                ),
             )
 
     def dir_list(self, path, args):
@@ -530,9 +553,13 @@ def human_size(size):
 
 
 class WSGIApp:
-    def __init__(self, topdir=".", hidden_files=False):
+    def __init__(self, topdir=".", hidden_files=False, config=None):
         self.topdir = pathlib.Path(topdir).resolve()
         self.hidden_files = hidden_files
+        if config is None:
+            self.config = Config()
+        else:
+            self.config = config
 
     def serve_jsapp(self, startdir):
         html = resources["index.html"].format(startdir.relative_to(self.topdir))
@@ -585,7 +612,7 @@ class WSGIApp:
     def dispatch_api_call(self, apidict, method):
         version_tpl, APIClass = API.find_version(apidict["version"])
         api = APIClass(self.env, self.topdir, self.hidden_files)
-        api.run(apidict, method)
+        api.run(apidict, method, self.config)
 
         self.start_response(api.response, api.headers)
         return api.result
@@ -685,6 +712,54 @@ class WSGIApp:
             )
 
 
+class Config:
+    def __init__(self, filename=None, *, string="", obj=None, mapping=None):
+        self.cfg = ConfigParser(interpolation=ExtendedInterpolation())
+        if filename:
+            self.filename = filename
+            self.cfg.read(self.filename)
+        elif string:
+            self.filename = "_string.ini"
+            self.cfg.read_string(string, self.filename)
+        elif obj:
+            self.filename = "_fileobj.ini"
+            self.cfg.read_file(string, self.filename)
+        elif mapping:
+            self.filename = "_mapping.ini"
+            self.cfg.read_dict(mapping, self.filename)
+        else:
+            self.filename = "_default.ini"
+            self.cfg.read_string(DEFAULT_CONFIG, self.filename)
+
+    def allowed(self, command, path):
+        """Determine if an operation is allowed for a Path object"""
+
+        def search_allowed_operations(path):
+            """Search the configuration sections until we find one
+            that matches the path and return the value of 'allow'"""
+            alt = pathlib.Path(path)
+            s = str(alt)
+            allowstr = ""
+            while s != "/" and s != ".":
+                allowstr = self.cfg.get(s, "allow", fallback="")
+                if allowstr:
+                    return allowstr
+                alt = alt.parent
+                s = str(alt)
+
+            return self.cfg.get("DEFAULT", "allow", fallback="none")
+
+        allowstr = search_allowed_operations(path)
+        if allowstr == "none":
+            return False
+        if allowstr == "all":
+            return True
+
+        ops = [op.strip() for op in allowstr.split(",")]
+
+        return command in ops
+
+
 def get_cli_arguments(argv):
     parser = argparse.ArgumentParser(description=__doc__)
 
@@ -712,6 +787,13 @@ def get_cli_arguments(argv):
         help="reveal hidden files and directories",
     )
 
+    parser.add_argument(
+        "--config",
+        "-c",
+        metavar="CONFIGFILE",
+        help="file to read permissions configuration from",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -728,7 +810,9 @@ def main(argv=None):
     args = get_cli_arguments(argv)
     port = args.port
 
-    ul_serve = WSGIApp(topdir=args.rootdir, hidden_files=args.show_hidden)
+    c = Config(args.config)
+
+    ul_serve = WSGIApp(topdir=args.rootdir, hidden_files=args.show_hidden, config=c)
     srv = make_server("", port, ul_serve, server_class=MTServer)
     print("Listening on port {0}".format(port), file=sys.stderr)
     srv.serve_forever()
@@ -806,8 +890,6 @@ a:visited {
 
 #errorarea {
     background: #007399;
-    overflow: auto;
-    text-overflow: ellipsis;
     max-width: 90%;
     background: #3377ff;
     width: 25%;
@@ -819,11 +901,16 @@ a:visited {
     position: fixed;
 }
 
+#errortxt {
+    overflow: auto;
+    //text-overflow: ellipsis;
+}
+
 #errback {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  padding: 5px;
+  padding: 10px;
   background: #002699;
   color: #eeeeee;
   border-radius: 4px;

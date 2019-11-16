@@ -1,0 +1,2 @@
+[DEFAULT]
+allow = list, download, mkdir, upload, info, checksum
