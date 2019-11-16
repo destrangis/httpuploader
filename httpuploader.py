@@ -1,4 +1,5 @@
 import argparse
+import base64
 import gzip
 import hashlib
 import io
@@ -132,7 +133,7 @@ class APIv1(API):
             raise HTUPLError(
                 400,
                 "Bad request",
-                "{} not a directory nor a file. Method: '{}', Cmd: '{}', Args: {}".format(
+                "'{}' not a directory nor a file. Method: '{}', Cmd: '{}', Args: {}".format(
                     path.relative_to(self.topdir), method, cmd, args
                 ),
             )
@@ -534,23 +535,7 @@ class WSGIApp:
         self.hidden_files = hidden_files
 
     def serve_jsapp(self, startdir):
-        html = """<?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE html
-             PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-            "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-          <head>
-            <title>Hello World</title>
-          </head>
-          <body>
-            <h3>Hello World</h3>
-            <p>{}</p>
-            <br/>
-            <pre>{}</pre>
-          </body>
-        </html>""".format(
-            startdir, pformat(self.env)
-        )
+        html = resources["index.html"].format(startdir.relative_to(self.topdir))
         self.start_response("200 OK", [("Content-type", "text/html")])
         return [html.encode()]
 
@@ -570,8 +555,24 @@ class WSGIApp:
         ]
 
     def send_favicon(self):
-        self.start_response("204 No content", [])
-        return []
+        enc_fav = (
+            b"000310RRvX5C8!H1OO-j000&M001Ze000mG001BW000311ONa4004"
+            b"jh0000000000000mG0000000000004r5f&c>p0sz+5)&Kwi000000"
+            b"00000000000000000000000000000000000000000000000000000"
+            b"000000000000000000002A|fIpAOHXYA|fIpAOHXYA|fIpAOHXW00"
+            b"0000000003sp)0000003sp)0000003sp)0000003sp)0000003sp)"
+            b"00002A|fIpAOHXZA|fIpFaQ7m0U{z00000005T&00000000000009"
+            b"6000960007_z007_z007_z00960008_y008_y008_y008_y008_y0"
+            b"07_z007_z008(O008_y00960000"
+        )
+        favicon = base64.b85decode(enc_fav)
+        headers = [
+            ("Content-lenght", str(len(favicon))),
+            ("Content-type", "image/x-icon"),
+            ("Content-disposition", "attachment; filename=favicon.ico"),
+        ]
+        self.start_response("200 OK", headers)
+        return [favicon]
 
     def check_valid(self, strpath):
         p = self.topdir / strpath
@@ -611,6 +612,24 @@ class WSGIApp:
         pathname = self.topdir / objloc
         return version, pathname, qdict
 
+    def send_static(self, fn):
+        content = resources[fn].encode()
+        mime, enc = mimetypes.guess_type(fn)
+        if not mime:
+            mime = "application/octet-stream"
+
+        headers = [
+            ("Content-length", str(len(content))),
+            ("Content-type", mime),
+            ("Content-disposition", "attachment; filename=" + fn),
+        ]
+        if enc:
+            headers.append(("Content-encoding", enc))
+
+        self.start_response("200 OK", headers)
+        # return FileWrapper(pfile.open("rb"))
+        return [content]
+
     def __call__(self, env, start_response):
         self.env = env
         self.start_response = start_response
@@ -621,6 +640,10 @@ class WSGIApp:
 
         if request == "/favicon.ico":
             return self.send_favicon()
+        if request == "/app.css":
+            return self.send_static("app.css")
+        if request == "/app.js":
+            return self.send_static("app.js")
 
         try:
             apiversion, resource, querydict = self.parse_request(request, querystring)
@@ -709,6 +732,333 @@ def main(argv=None):
     srv = make_server("", port, ul_serve, server_class=MTServer)
     print("Listening on port {0}".format(port), file=sys.stderr)
     srv.serve_forever()
+
+
+htmlpage = """
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>httpuploader</title>
+    <link rel="stylesheet" href="app.css">
+    <script src="app.js" language="javascript"></script>
+  </head>
+  <body>
+    <input id="curdir" type="hidden" value="{}" />
+    <div class="invisible boxed" id="dirinput">
+        <span>Enter directory name:</span>
+        <input id="direntry" type="text" name="dir" size="40" />
+    </div>
+    <div id="topstrip">
+        <div class="toprowbutton" id="mkdirbtn">Create directory here</div>
+        <label  class="toprowbutton">
+            <input id="fileinput" multiple="" type="file">
+            <div id="uplbtn" >Upload to this directory</div>
+        </label>
+        <div id="statusmsg"></div>
+    </div>
+    <h3 id="pgtitle"></h3>
+    <div id="dirarea"></div>
+    <div id="filearea"></div>
+    <div id="errorarea" class="invisible">
+        <div id="errortxt"></div>
+        <button id="errback">Back</button>
+    </div>
+  </body>
+</html>
+"""
+
+stylesheet = """
+body {
+    background: #007399;
+    font-family: "arial", "helvetica", "sans-serif";
+    font-size: large;
+    color: #eeeeee;
+}
+
+a:link {
+    color: #bbbbbb;
+    text-decoration: none;
+}
+
+a:visited {
+    color: #999999;
+    text-decoration: none;
+}
+
+#topstrip {
+    display: flex;
+    width: 100%;
+}
+
+#dirarea {
+    float:left;
+    overflow: auto;
+    min-width: 15%;
+    max-width: 40%;
+}
+
+#filearea {
+    overflow: auto;
+    max-width: 90%;
+}
+
+#errorarea {
+    background: #007399;
+    border: 2px;
+    max-width: 90%;
+    margin-top: 10%;
+}
+
+#errback {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+}
+
+.diritem {
+    background: #002699;
+    min-width: 10%;
+    max-width: 75%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 10px;
+}
+
+.fileitem {
+    background: #002699;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 5px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 10px;
+}
+
+.fileitem:hover, .diritem:hover {
+    box-shadow: 0 5px 5px 0 #001a66;
+}
+
+.filesize {
+    float: right;
+}
+
+.boxed {
+    box-shadow: 0 5px 5px 0 #001a66;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+.invisible {
+    display: none;
+}
+
+#dirinput {
+    background: #007399;
+    width: 25%;
+    margin: 30px 0 0 30px;
+    padding: 5px;
+    position: absolute;
+}
+
+
+.toprowbutton {
+    width: 10%;
+    text-align: center;
+    background: #3377ff;
+    margin-top: 5px;
+    margin-right: 5px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 10px;
+}
+
+.toprowbutton:hover {
+    background: "#6699ff";
+    box-shadow: 0 5px 5px 0 #001a66;
+}
+"""
+
+jsapp = """
+(function(document, window, undefined) {
+
+    window.onload = function() {
+
+        var curdir = document.getElementById('curdir');
+        //var topstrip = document.getElementById('topstrip');
+        var fileSelect = document.getElementById('fileinput');
+        var topRowBtns = document.getElementsByClassName('toprowbutton');
+        var msg = document.getElementById('statusmsg');
+        var mkdirbtn = document.getElementById('mkdirbtn');
+        var uplbtn = document.getElementById('uplbtn');
+        var dirinput = document.getElementById('dirinput');
+        var direntry = document.getElementById('direntry');
+        var pgtitle = document.getElementById('pgtitle');
+        var dirarea = document.getElementById('dirarea');
+        var filearea = document.getElementById('filearea');
+        var errorarea = document.getElementById('errorarea');
+        var errortxt = document.getElementById('errortxt');
+        var errback = document.getElementById('errback');
+
+        function fill_filearea(tagid, filelist) {
+            tagid.innerText = "";
+            for (var i=0; i<filelist.length; i++) {
+                    var name = filelist[i].name,
+                        link = filelist[i].links.download.href,
+                        size = filelist[i].size,
+                        div = document.createElement("div"),
+                        anchor = document.createElement("a"),
+                        szelm = document.createElement("span");
+                    div.setAttribute("class", "fileitem");
+                    //setBoxable(div);
+                    szelm.setAttribute("class", "filesize");
+                    szelm.innerText = size;
+                    anchor.setAttribute("href", link);
+                    anchor.innerText = name;
+                    div.appendChild(anchor);
+                    div.appendChild(szelm);
+                    tagid.appendChild(div);
+            }
+        }
+
+        function fill_dirarea(tagid, dirlist) {
+            tagid.innerText = "";
+            for (var i=0; i<dirlist.length; i++) {
+                var name = dirlist[i].name,
+                    link = dirlist[i].links.list.href;
+                var div = document.createElement("div");
+                var anchor = document.createElement("a");
+                div.setAttribute("class", "diritem");
+                //setBoxable(div);
+                anchor.setAttribute("href", link)
+                anchor.innerText = name;
+                anchor.addEventListener('click', function(evnt) {
+                    var a = evnt.target;
+                    evnt.preventDefault();
+                    var url = a.href;
+                    setup_page(url);
+                });
+                div.appendChild(anchor);
+                tagid.appendChild(div);
+                tagid.appendChild(document.createElement("br"));
+            }
+        }
+
+        function fill_errorarea(tagid, errobj) {
+            var h3 = document.createElement("h3"),
+                pre = document.createElement("pre");
+            h3.innerText = errobj.rc + " " + errobj.msg;
+            pre.innerText = errobj.data.extra;
+            tagid.appendChild(h3);
+            tagid.appendChild(pre);
+        }
+
+        function setup_page(url) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url);
+            xhr.onload = function() {
+                var jsnobj = JSON.parse(xhr.response);
+                if (xhr.status == 200) {
+                    var dirname = jsnobj.data.name;
+                    var reldir = dirname.charAt(0) === '/' ?
+                                    dirname.substring(1): dirname;
+                    pgtitle.innerText = "Contents of " + dirname;
+                    curdir.value = reldir;
+                    fill_filearea(filearea, jsnobj.data.files);
+                    fill_dirarea(dirarea, jsnobj.data.directories);
+                } else if (xhr.status >= 400) {
+                    fill_errorarea(errortxt, jsnobj);
+                    errorarea.classList.toggle("invisible");
+                }
+            };
+            xhr.send();
+        }
+
+        mkdirbtn.addEventListener('click', function(event) {
+            dirinput.classList.toggle("invisible");
+        });
+
+        errback.addEventListener('click', function(event) {
+            errorarea.classList.toggle("invisible");
+        });
+
+        dirinput.addEventListener('change', function(event) {
+            var dirname = direntry.value;
+            dirinput.classList.toggle("invisible");
+            direntry.value = '';
+            var url = "/api/1/" + curdir.value + "/" + dirname + "?cmd=mkdir";
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.onload = function() {
+                if (xhr.status < 400) {
+                    //pgtitle.dataset.curdir = '';
+                    //window.location.reload(true);
+                    var apidir = "/api/1/" + curdir.value + "?cmd=list";
+                    setup_page(apidir);
+                } else {
+                    var jsnobj = {};
+                    jsnobj.rc = xhr.status;
+                    jsnobj.msg = xhr.statusText;
+                    jsnobj.extra = "";
+
+                    fill_errorarea(errortxt, jsnobj);
+                    errorarea.classList.toggle("invisible");
+                }
+            };
+            xhr.send();
+        });
+
+        fileSelect.addEventListener('change', function(event) {
+            event.preventDefault();
+
+            var fileList = fileSelect.files;
+            if (fileList && fileList.length == 0) {
+                return;
+            }
+
+            var formData = new FormData();
+            for (var i=0; i<fileList.length; i++) {
+                var f = fileList[i];
+                formData.append("files_"+i, f, f.name);
+            }
+            xhr = new XMLHttpRequest();
+            xhr.open('POST', curdir.value);
+            xhr.onload = function() {
+                if (xhr.status < 400) {
+                    //uploadButton.innerHTML = "Upload";
+                    var apidir = "/api/1/" + curdir.value + "?cmd=list";
+                    setup_page(apidir);
+                } else {
+                    var jsnobj = {};
+                    jsnobj.rc = xhr.status;
+                    jsnobj.msg = xhr.statusText;
+                    jsnobj.extra = "";
+
+                    fill_errorarea(errortxt, jsnobj);
+                    errorarea.classList.toggle("invisible");
+                }
+            };
+            xhr.send(formData);
+        }, true);
+
+        setup_page("/api/1/"+curdir.value);
+    };
+
+})(document, window);
+"""
+
+resources = {"index.html": htmlpage, "app.js": jsapp, "app.css": stylesheet}
 
 
 if __name__ == "__main__":
