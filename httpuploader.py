@@ -131,9 +131,9 @@ class APIv1(API):
             ops = self.fileops
         else:
             raise HTUPLError(
-                400,
-                "Bad request",
-                "'{}' not a directory nor a file. Method: '{}', Cmd: '{}', Args: {}".format(
+                404,
+                "Not found",
+                "'{}' not a directory nor a file.\nMethod: '{}', Cmd: '{}', Args: {}".format(
                     path.relative_to(self.topdir), method, cmd, args
                 ),
             )
@@ -455,7 +455,7 @@ class APIv1(API):
                 400,
                 "Bad request",
                 {
-                    "extra": "Destination not specified. cmd='copy' path='/{}'".format(
+                    "extra": "Destination not specified.\ncmd='copy' path='/{}'".format(
                         relpath
                     )
                 },
@@ -471,7 +471,7 @@ class APIv1(API):
                 400,
                 "Bad request",
                 {
-                    "extra": "Destination and source are the same. cmd='copy' path='/{}' "
+                    "extra": "Destination and source are the same.\ncmd='copy' path='/{}' "
                     "dest='{}'".format(relpath, reldest)
                 },
             )
@@ -480,7 +480,7 @@ class APIv1(API):
                 400,
                 "Bad request",
                 {
-                    "extra": "Cannot write to destination. cmd='copy' path='/{}' "
+                    "extra": "Cannot write to destination.\ncmd='copy' path='/{}' "
                     "dest='{}'".format(path.relative_to(self.topdir), reldest)
                 },
             )
@@ -493,7 +493,7 @@ class APIv1(API):
                 400,
                 "Bad request",
                 {
-                    "extra": "Destination not specified. cmd='move' path='/{}'".format(
+                    "extra": "Destination not specified.\ncmd='move' path='/{}'".format(
                         relpath
                     )
                 },
@@ -659,7 +659,7 @@ class WSGIApp:
                 "args": querydict,
             }
         elif method == "GET":
-            if resource.is_dir():
+            if not resource.is_file():
                 return self.serve_jsapp(resource)
             apidict = {
                 "version": API.latest_version(),
@@ -745,6 +745,10 @@ htmlpage = """
   </head>
   <body>
     <input id="curdir" type="hidden" value="{}" />
+    <div id="errorarea" class="invisible">
+        <div id="errortxt"></div>
+        <div id="errback">Back</div>
+    </div>
     <div class="invisible boxed" id="dirinput">
         <span>Enter directory name:</span>
         <input id="direntry" type="text" name="dir" size="40" />
@@ -760,10 +764,6 @@ htmlpage = """
     <h3 id="pgtitle"></h3>
     <div id="dirarea"></div>
     <div id="filearea"></div>
-    <div id="errorarea" class="invisible">
-        <div id="errortxt"></div>
-        <button id="errback">Back</button>
-    </div>
   </body>
 </html>
 """
@@ -805,15 +805,27 @@ a:visited {
 
 #errorarea {
     background: #007399;
-    border: 2px;
+    overflow: auto;
+    text-overflow: ellipsis;
     max-width: 90%;
-    margin-top: 10%;
+    background: #3377ff;
+    width: 25%;
+    top: 50px;
+    left: 50px;
+    padding: 30px;
+    border: 1px solid #cccccc;
+    border-radius: 15px;
+    position: fixed;
 }
 
 #errback {
   position: absolute;
   bottom: 10px;
   right: 10px;
+  padding: 5px;
+  background: #002699;
+  color: #eeeeee;
+  border-radius: 4px;
 }
 
 .diritem {
@@ -956,6 +968,7 @@ jsapp = """
         }
 
         function fill_errorarea(tagid, errobj) {
+            tagid.innerText = "";
             var h3 = document.createElement("h3"),
                 pre = document.createElement("pre");
             h3.innerText = errobj.rc + " " + errobj.msg;
@@ -1007,10 +1020,7 @@ jsapp = """
                     var apidir = "/api/1/" + curdir.value + "?cmd=list";
                     setup_page(apidir);
                 } else {
-                    var jsnobj = {};
-                    jsnobj.rc = xhr.status;
-                    jsnobj.msg = xhr.statusText;
-                    jsnobj.extra = "";
+                    var jsnobj = JSON.parse(xhr.response);
 
                     fill_errorarea(errortxt, jsnobj);
                     errorarea.classList.toggle("invisible");
@@ -1040,10 +1050,7 @@ jsapp = """
                     var apidir = "/api/1/" + curdir.value + "?cmd=list";
                     setup_page(apidir);
                 } else {
-                    var jsnobj = {};
-                    jsnobj.rc = xhr.status;
-                    jsnobj.msg = xhr.statusText;
-                    jsnobj.extra = "";
+                    var jsnobj = JSON.parse(xhr.response);
 
                     fill_errorarea(errortxt, jsnobj);
                     errorarea.classList.toggle("invisible");
