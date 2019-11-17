@@ -794,6 +794,14 @@ def get_cli_arguments(argv):
         help="file to read permissions configuration from",
     )
 
+    parser.add_argument(
+        "--version",
+        "-v",
+        default=False,
+        action="store_true",
+        help="show program version and exit",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -808,6 +816,10 @@ def main(argv=None):
         argv = sys.argv[1:]
 
     args = get_cli_arguments(argv)
+    if args.version:
+        print(MODULE_VERSION)
+        return 0
+
     port = args.port
 
     c = Config(args.config)
@@ -816,6 +828,8 @@ def main(argv=None):
     srv = make_server("", port, ul_serve, server_class=MTServer)
     print("Listening on port {0}".format(port), file=sys.stderr)
     srv.serve_forever()
+
+    return 0
 
 
 htmlpage = """
