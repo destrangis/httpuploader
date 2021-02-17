@@ -8,6 +8,7 @@ import mimetypes
 import os
 import pathlib
 import shutil
+import stat
 import sys
 import tarfile
 import traceback
@@ -22,7 +23,7 @@ from configparser import ConfigParser, ExtendedInterpolation
 
 CHUNKSIZE = 65536  # 64KB
 
-MODULE_VERSION = "1.0.1"
+MODULE_VERSION = "1.0.2"
 
 DEFAULT_CONFIG = """
 [DEFAULT]
@@ -534,7 +535,7 @@ class APIv1(API):
 def is_hidden(path):
     st = path.stat()
     if getattr(st, "st_file_attributes", None):
-        return (st.st_file_attributes | stat.stat.FILE_ATTRIBUTE_HIDDEN) != 0
+        return (st.st_file_attributes & stat.FILE_ATTRIBUTE_HIDDEN) != 0
     return path.name[0] == "."
 
 
@@ -671,7 +672,7 @@ class WSGIApp:
             return self.send_static("app.css")
         if request == "/app.js":
             return self.send_static("app.js")
-
+            
         try:
             apiversion, resource, querydict = self.parse_request(request, querystring)
         except HTUPLError as err:
@@ -738,14 +739,14 @@ class Config:
             """Search the configuration sections until we find one
             that matches the path and return the value of 'allow'"""
             alt = pathlib.Path(path)
-            s = str(alt)
+            s = str(alt).replace("\\", "/") # forward slashes or it won't work on Windows
             allowstr = ""
             while s != "/" and s != ".":
                 allowstr = self.cfg.get(s, "allow", fallback="")
                 if allowstr:
                     return allowstr
                 alt = alt.parent
-                s = str(alt)
+                s = str(alt).replace("\\", "/")
 
             return self.cfg.get("DEFAULT", "allow", fallback="none")
 
