@@ -20,10 +20,11 @@ from cgi import FieldStorage
 from pprint import pformat
 from datetime import datetime, timedelta, timezone
 from configparser import ConfigParser, ExtendedInterpolation
+from http.server import ThreadingHTTPServer
 
 CHUNKSIZE = 65536  # 64KB
 
-MODULE_VERSION = "1.0.2"
+MODULE_VERSION = "1.0.3"
 
 DEFAULT_CONFIG = """
 [DEFAULT]
@@ -672,7 +673,7 @@ class WSGIApp:
             return self.send_static("app.css")
         if request == "/app.js":
             return self.send_static("app.js")
-            
+
         try:
             apiversion, resource, querydict = self.parse_request(request, querystring)
         except HTUPLError as err:
@@ -806,12 +807,39 @@ def get_cli_arguments(argv):
     return parser.parse_args(argv)
 
 
-def main(argv=None):
-    from wsgiref.simple_server import make_server, WSGIServer
-    from socketserver import ThreadingMixIn
+class WSGIThreadingServer(ThreadingHTTPServer):
 
-    class MTServer(ThreadingMixIn, WSGIServer):
-        pass
+    """BaseHTTPServer that implements the Python WSGI protocol
+        straight copy of std lib's WSGIServer, but subclassing from
+        ThreadingHTTPServer
+    """
+
+    application = None
+
+    def server_bind(self):
+        """Override server_bind to store the server name."""
+        ThreadingHTTPServer.server_bind(self)
+        self.setup_environ()
+
+    def setup_environ(self):
+        # Set up base environment
+        env = self.base_environ = {}
+        env['SERVER_NAME'] = self.server_name
+        env['GATEWAY_INTERFACE'] = 'CGI/1.1'
+        env['SERVER_PORT'] = str(self.server_port)
+        env['REMOTE_HOST']=''
+        env['CONTENT_LENGTH']=''
+        env['SCRIPT_NAME'] = ''
+
+    def get_app(self):
+        return self.application
+
+    def set_app(self,application):
+        self.application = application
+
+
+def main(argv=None):
+    from wsgiref.simple_server import make_server
 
     if argv is None:
         argv = sys.argv[1:]
@@ -826,7 +854,7 @@ def main(argv=None):
     c = Config(args.config)
 
     ul_serve = WSGIApp(topdir=args.rootdir, hidden_files=args.show_hidden, config=c)
-    srv = make_server("", port, ul_serve, server_class=MTServer)
+    srv = make_server("", port, ul_serve, server_class=WSGIThreadingServer)
     print("Listening on port {0}".format(port), file=sys.stderr)
     srv.serve_forever()
 
